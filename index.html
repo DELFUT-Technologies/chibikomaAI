@@ -38,6 +38,7 @@
         }
         .block.blue { width: 50px; }
         .block.red { width: 25px; height: 25px; }
+        .block.purple { width: 25px; height: 25px; }
         .block.yellow { width: 50px; height: 50px; }
         .block.green { width: 75px; height: 50px; }
         .block.gray { width: 25px; height: 25px; } /* グレーのブロックを追加 */
@@ -49,6 +50,7 @@
         }
         .blue { background-color: #3498db; }
         .red { background-color: #e74c3c; }
+        .purple { background-color: #e73ce4; }
         .yellow { background-color: #f1c40f; }
         .green { background-color: #2ecc71; }
         .gray { background-color: #95a5a6; } /* グレーのブロックの色を設定 */
@@ -102,7 +104,7 @@
         <div class="block-container" id="block-container"></div>
         <div>
             <div class="grid-container" id="game-board"></div>
-            <div id="score">塗りつぶしたマス: 0 / 24</div>
+            <div id="score">配置したコマ: 0 / 24</div> <!-- ここに表示を追加 -->
         </div>
     </div>
     <script>
@@ -112,32 +114,35 @@
         const board = Array(TOTAL_CELLS).fill(0);
 
         const blocks = [
-            { type: 'red', count: 8, size: 1, width: 1, height: 1 }, // 赤を一番上に移動
-            { type: 'gray', count: 8, size: 1, width: 1, height: 1 }, // グレーのブロックを追加
-            { type: 'blue', count: 8, size: 2, width: 2, height: 1 },
-            { type: 'yellow', count: 2, size: 4, width: 2, height: 2 },
-            { type: 'green', count: 1, size: 6, width: 3, height: 2 }
+            { type: 'red', count: 2, size: 1, width: 1, height: 1 }, // 赤を一番上に移動
+            { type: 'gray', count: Math.floor(Math.random() * 2) + 1, size: 1, width: 1, height: 1 }, // グレーのブロックの初期値を1から6に変更
+            { type: 'purple', count: Math.floor(Math.random() * 2) + 1, size: 1, width: 1, height: 1 }, // グレーのブロックの初期値を1から6に変更
+            { type: 'blue', count: 0, size: 2, width: 2, height: 1 },
+            { type: 'yellow', count: 0, size: 4, width: 2, height: 2 },
+            { type: 'green', count: 0, size: 6, width: 3, height: 2 }
         ];
 
-        function initGame() {
-            initBoard();
-            initBlocks();
-        }
+        function getRandomCounts() {
+            let remainingCells = TOTAL_CELLS - 2; // 赤のブロックのセル数を引く
+            const blockSizes = blocks.slice(1).map(block => block.size);
+            const randomCounts = blockSizes.map(size => {
+                const maxCount = Math.floor(remainingCells / size);
+                const count = Math.floor(Math.random() * (maxCount + 1));
+                remainingCells -= count * size;
+                return count;
+            });
 
-        function initBoard() {
-            const gameBoard = document.getElementById('game-board');
-            for (let i = 0; i < TOTAL_CELLS; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'grid-item';
-                cell.dataset.index = i;
-                gameBoard.appendChild(cell);
-            }
-            gameBoard.addEventListener('dragover', dragOver);
-            gameBoard.addEventListener('dragleave', dragLeave);
-            gameBoard.addEventListener('drop', drop);
+            // 残りのセル数を最初のブロックに追加
+            randomCounts[0] += remainingCells / blockSizes[0];
+            return randomCounts;
         }
 
         function initBlocks() {
+            const randomCounts = getRandomCounts();
+            blocks.slice(1).forEach((block, index) => {
+                block.count = randomCounts[index];
+            });
+
             const blockContainer = document.getElementById('block-container');
             blocks.forEach(block => {
                 const blockWrapper = document.createElement('div');
@@ -308,13 +313,34 @@
 
         function checkCompletion() {
             if (filledCells === TOTAL_CELLS) {
-                alert('おめでとうございます！全てのマスを塗りつぶしました！');
+                alert('おめでとうございます！全てのコマを塗りつぶしました！');
             } else if (blocks.every(b => b.count === 0)) {
-                alert('ブロックがなくなりました。ゲームオーバー！');
+                alert('居室がなくなりました。ゲームオーバー！');
             }
+        }
+
+        function initGame() {
+            initBoard();
+            initBlocks();
+        }
+
+        function initBoard() {
+            const gameBoard = document.getElementById('game-board');
+            for (let i = 0; i < TOTAL_CELLS; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-item';
+                cell.dataset.index = i;
+                gameBoard.appendChild(cell);
+            }
+            gameBoard.addEventListener('dragover', dragOver);
+            gameBoard.addEventListener('dragleave', dragLeave);
+            gameBoard.addEventListener('drop', drop);
         }
 
         initGame();
     </script>
+    <footer style="position: fixed; bottom: 0; width: 100%; text-align: center; background-color: #f0f0f0; padding: 10px 0;">
+        ちびコマAI &copy; 2024 Delfut Technologies
+    </footer>
 </body>
 </html>
