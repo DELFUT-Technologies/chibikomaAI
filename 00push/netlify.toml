@@ -1,0 +1,7 @@
+[build]
+  publish = "."
+  # ビルドコマンドが必要な場合は以下を追加
+  # command = "npm run build"
+
+[functions]
+  directory = "00push/netlify/functions"
