@@ -6,7 +6,7 @@ exports.handler = async (event, context) => {
         // Create a new customer
         const customer = await stripe.customers.create({
             payment_method: paymentMethodId,
-          email: customerEmail,
+            email: customerEmail,
             invoice_settings: {
                 default_payment_method: paymentMethodId,
             },
