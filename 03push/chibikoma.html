@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ちびコマAI（ドラッグ&ドロップ）</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .grid-and-cols {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(var(--cols), 50px);
+            gap: 0;
+            position: relative;
+        }
+        .grid-item {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            transition: background-color 0.3s;
+        }
+        .grid-item.drag-over {
+            background-color: rgba(52, 152, 219, 0.3);
+        }
+        .highlight-container {
+            position: absolute;
+            border: 2px solid black;
+            pointer-events: none;
+        }
+        .block-container {
+            display: flex;
+            gap: 20px;
+        }
+        .block-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        .block {
+            cursor: move;
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: 10px;
+            position: relative;
+            border: 2px solid black;
+        }
+        .block.blue { width: 50px; }
+        .block.red { width: 25px; height: 25px; }
+        .block.purple { width: 25px; height: 25px; }
+        .block.yellow { width: 50px; height: 50px; }
+        .block.green { width: 75px; height: 50px; }
+        .block.gray { width: 25px; height: 25px; }
+        .block-cell {
+            width: 25px;
+            height: 25px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        .blue { background-color: #3498db; }
+        .red { background-color: #e74c3c; }
+        .purple { background-color: #e73ce4; }
+        .yellow { background-color: #f1c40f; }
+        .green { background-color: #2ecc71; }
+        .gray { background-color: #95a5a6; }
+        .rotate-button, .change-count-button {
+            cursor: pointer;
+            padding: 5px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        .block[disabled] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .count-input {
+            width: 30px;
+            margin-left: 5px;
+            height: 25px;
+            text-align: right;
+        }
+        .form-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .form-container form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .input-container form {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+        }
+        .input-container input {
+            width: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="grid-and-cols">
+            <div class="grid-container" id="game-board"></div>
+            <div class="input-container">
+                <form id="cols-form">
+                    <label for="cols">列:</label>
+                    <input type="number" id="cols" name="cols" min="1" value="6">
+                </form>
+            </div>
+        </div>
+        <div class="input-container">
+            <form id="rows-form">
+                <label for="rows">行:</label>
+                <input type="number" id="rows" name="rows" min="1" value="4">
+            </form>
+            <div id="score">配置したコマ: 0 / 24</div>
+        </div>
+        <div class="block-container" id="block-container"></div>
+    </div>
+    <script>
+        let COLS = 6;
+        let ROWS = 4;
+        let TOTAL_CELLS = COLS * ROWS;
+        let filledCells = 0;
+        let board = new Array(TOTAL_CELLS).fill(0);
+
+        const blocks = [
+            { type: 'red', count: 2, size: 1, width: 1, height: 1 },
+            { type: 'gray', count: Math.floor(Math.random() * 2) + 1, size: 1, width: 1, height: 1 },
+            { type: 'purple', count: Math.floor(Math.random() * 2) + 1, size: 1, width: 1, height: 1 },
+            { type: 'blue', count: 0, size: 2, width: 2, height: 1 },
+            { type: 'yellow', count: 0, size: 4, width: 2, height: 2 },
+            { type: 'green', count: 0, size: 6, width: 3, height: 2 }
+        ];
+
+        function getRandomCounts() {
+            let remainingCells = TOTAL_CELLS - 2;
+            const blockSizes = blocks.slice(1).map(block => block.size);
+            const randomCounts = blockSizes.map(size => {
+                const maxCount = Math.floor(remainingCells / size);
+                const count = Math.floor(Math.random() * (maxCount + 1));
+                remainingCells -= count * size;
+                return count;
+            });
+
+            randomCounts[0] += remainingCells / blockSizes[0];
+            return randomCounts;
+        }
+
+        function initBlocks() {
+            const randomCounts = getRandomCounts();
+            blocks.slice(1).forEach((block, index) => {
+                block.count = randomCounts[index];
+            });
+
+            const blockContainer = document.getElementById('block-container');
+            blocks.forEach(block => {
+                const blockWrapper = document.createElement('div');
+                blockWrapper.className = 'block-wrapper';
+                
+                const blockElement = document.createElement('div');
+                blockElement.className = `block ${block.type}`;
+                blockElement.draggable = true;
+                blockElement.dataset.type = block.type;
+                blockElement.dataset.size = block.size;
+                blockElement.dataset.width = block.width;
+                blockElement.dataset.height = block.height;
+                for (let j = 0; j < block.size; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = `block-cell ${block.type}`;
+                    blockElement.appendChild(cell);
+                }
+                blockElement.addEventListener('dragstart', dragStart);
+                blockElement.addEventListener('dragend', dragEnd);
+
+                if (block.count === 0) {
+                    blockElement.setAttribute('disabled', 'true');
+                }
+                
+                const countElement = document.createElement('input');
+                countElement.type = 'number';
+                countElement.className = 'count-input';
+                countElement.value = block.count;
+                countElement.min = 0;
+                countElement.step = 1;
+                countElement.addEventListener('change', () => changeBlockCount(block, countElement, blockElement));
+                
+                blockWrapper.appendChild(blockElement);
+                blockWrapper.appendChild(countElement);
+                
+                if (block.size > 1 && block.width !== block.height) {
+                    const rotateButton = document.createElement('button');
+                    rotateButton.textContent = '回転';
+                    rotateButton.className = 'rotate-button';
+                    rotateButton.addEventListener('click', () => rotateBlock(blockElement));
+                    blockWrapper.appendChild(rotateButton);
+                }
+                
+                blockContainer.appendChild(blockWrapper);
+            });
+        }
+
+        function rotateBlock(blockElement) {
+            const width = parseInt(blockElement.dataset.width);
+            const height = parseInt(blockElement.dataset.height);
+            blockElement.style.width = `${height * 25}px`;
+            blockElement.style.height = `${width * 25}px`;
+            blockElement.dataset.width = height;
+            blockElement.dataset.height = width;
+        }
+
+        function changeBlockCount(block, countElement, blockElement) {
+            const newCount = parseInt(countElement.value);
+            if (!isNaN(newCount)) {
+                block.count = newCount;
+                if (block.count === 0) {
+                    blockElement.setAttribute('disabled', 'true');
+                } else {
+                    blockElement.removeAttribute('disabled');
+                }
+            }
+        }
+
+        function dragStart(e) {
+            if (e.target.hasAttribute('disabled')) {
+                e.preventDefault();
+                return;
+            }
+            e.dataTransfer.setData('text/plain', `${e.target.dataset.type},${e.target.dataset.size},${e.target.dataset.width},${e.target.dataset.height}`);
+            e.target.style.opacity = '0.5';
+        }
+
+        function dragEnd(e) {
+            e.target.style.opacity = '1';
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+            const gridItem = e.target.closest('.grid-item');
+            if (gridItem) {
+                gridItem.classList.add('drag-over');
+            }
+        }
+
+        function dragLeave(e) {
+            const gridItem = e.target.closest('.grid-item');
+            if (gridItem) {
+                gridItem.classList.remove('drag-over');
+            }
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            const gridItem = e.target.closest('.grid-item');
+            if (gridItem) {
+                gridItem.classList.remove('drag-over');
+            }
+            const [type, size, width, height] = e.dataTransfer.getData('text').split(',');
+            const targetIndex = parseInt(gridItem.dataset.index);
+            if (canPlaceBlock(targetIndex, parseInt(width), parseInt(height))) {
+                placeBlock(targetIndex, type, parseInt(width), parseInt(height));
+                updateBlockCount(type);
+                updateScore();
+                checkCompletion();
+            } else {
+                alert('ここにブロックを置くことはできません。');
+            }
+        }
+
+        function canPlaceBlock(index, width, height) {
+            const row = Math.floor(index / COLS);
+            const col = index % COLS;
+            if (col + width > COLS || row + height > TOTAL_CELLS / COLS) return false;
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    if (board[index + i * COLS + j] !== 0) return false;
+                }
+            }
+            return true;
+        }
+
+        function placeBlock(index, type, width, height) {
+            const row = Math.floor(index / COLS);
+            const col = index % COLS;
+            const blockCells = [];
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    const cellIndex = (row + i) * COLS + (col + j);
+                    board[cellIndex] = 1;
+                    const cell = document.querySelectorAll('.grid-item')[cellIndex];
+                    cell.className = `grid-item ${type} highlight`;
+                    blockCells.push(cell);
+                    filledCells++;
+                }
+            }
+            const highlightContainer = document.createElement('div');
+            highlightContainer.className = 'highlight-container';
+            highlightContainer.style.top = `${Math.floor(index / COLS) * 50}px`;
+            highlightContainer.style.left = `${(index % COLS) * 50}px`;
+            highlightContainer.style.width = `${width * 50 - 2}px`;
+            highlightContainer.style.height = `${height * 50 - 2}px`;
+            document.getElementById('game-board').appendChild(highlightContainer);
+        }
+
+        function updateBlockCount(type) {
+            const block = blocks.find(b => b.type === type);
+            block.count--;
+            const countElement = document.querySelector(`.block.${type}`).nextElementSibling;
+            countElement.value = block.count;
+            const blockElement = document.querySelector(`.block.${type}`);
+            if (block.count === 0) {
+                blockElement.setAttribute('disabled', 'true');
+            } else {
+                blockElement.removeAttribute('disabled');
+            }
+        }
+
+        function updateScore() {
+            document.getElementById('score').textContent = `塗りつぶしたマス: ${filledCells} / ${TOTAL_CELLS}`;
+        }
+
+        function checkCompletion() {
+            if (filledCells === TOTAL_CELLS) {
+                alert('おめでとうございます！全てのコマを塗りつぶしました！');
+            } else if (blocks.every(b => b.count === 0)) {
+                alert('居室がなくなりました。ゲームオーバー！');
+            }
+        }
+
+        function initGame() {
+            TOTAL_CELLS = COLS * ROWS;
+            board = new Array(TOTAL_CELLS).fill(0);
+
+            document.documentElement.style.setProperty('--cols', COLS);
+            document.documentElement.style.setProperty('--rows', ROWS);
+
+            const gameBoard = document.getElementById('game-board');
+            gameBoard.innerHTML = '';
+
+            for (let i = 0; i < TOTAL_CELLS; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-item';
+                cell.dataset.index = i;
+                gameBoard.appendChild(cell);
+            }
+            gameBoard.addEventListener('dragover', dragOver);
+            gameBoard.addEventListener('dragleave', dragLeave);
+            gameBoard.addEventListener('drop', drop);
+
+            initBlocks();
+        }
+
+        function updateBoardSize() {
+            const rowsInput = document.getElementById('rows').value;
+            const colsInput = document.getElementById('cols').value;
+            ROWS = parseInt(rowsInput, 10);
+            COLS = parseInt(colsInput, 10);
+            initGame();
+        }
+
+        document.getElementById('rows').addEventListener('input', updateBoardSize);
+        document.getElementById('cols').addEventListener('input', updateBoardSize);
+
+        document.getElementById('rows-form').removeEventListener('submit', function(event) {
+            event.preventDefault();
+            updateBoardSize();
+        });
+
+        initGame();
+    </script>
+    <footer style="position: fixed; bottom: 0; width: 100%; text-align: center; background-color: #f0f0f0; padding: 10px 0;">
+        ちびコマAI &copy; 2024 Delfut Technologies
+    </footer>
+</body>
+</html>
